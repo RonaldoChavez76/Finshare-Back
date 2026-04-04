@@ -27,6 +27,13 @@ def create_app():
     # from app.controllers.usuario_controller import usuario_bp
     # app.register_blueprint(usuario_bp, url_prefix='/api/usuarios')
     
+    # --- REGISTRO DE RUTAS (BLUEPRINTS) ---
+    from app.controllers.grupo_controller import grupo_bp
+    app.register_blueprint(grupo_bp, url_prefix='/api/grupos')
+    
+    from app.controllers.gasto_controller import gasto_bp
+    app.register_blueprint(gasto_bp, url_prefix='/api/gastos')
+    
     @app.route('/')
     def index():
         return {"mensaje": "API de FinShare Analytics funcionando correctamente"}
