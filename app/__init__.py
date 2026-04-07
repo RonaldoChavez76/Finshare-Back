@@ -27,12 +27,24 @@ def create_app():
     # from app.controllers.usuario_controller import usuario_bp
     # app.register_blueprint(usuario_bp, url_prefix='/api/usuarios')
     
-    # --- REGISTRO DE RUTAS (BLUEPRINTS) ---
-    from app.controllers.grupo_controller import grupo_bp
-    app.register_blueprint(grupo_bp, url_prefix='/api/grupos')
+   #1. Autenticación (Pública)
+    from app.routes.auth_routes import auth_bp
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+
+    # 2. Grupos (Unificados)
+    from app.routes.group_routes import groups_bp
+    app.register_blueprint(groups_bp, url_prefix='/api/groups')
     
+    # 3. Gastos (Corregido el typo de 'expanse')
+    from app.routes.expense_routes import expenses_bp
+    app.register_blueprint(expenses_bp, url_prefix='/api/expenses')
+
+    # 4. Versiones en Español (Si las vas a mantener para tu compañero)
     from app.controllers.gasto_controller import gasto_bp
     app.register_blueprint(gasto_bp, url_prefix='/api/gastos')
+    
+    from app.controllers.grupo_controller import grupo_bp
+    app.register_blueprint(grupo_bp, url_prefix='/api/grupos_es') # Prefijo diferente para evitar choque
     
     @app.route('/')
     def index():
