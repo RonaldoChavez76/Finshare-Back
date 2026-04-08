@@ -39,13 +39,14 @@ def verify_password(plain_password, hashed_password):
         hashed_password.encode('utf-8')
     )
 
-# 4. Constructor de Deudas (La pieza que faltaba)
-def build_debt(description, amount, status="pending"):
+# 4. Constructor de Deudas (Alineado con el esquema de la base de datos)
+def build_debt(creditor, total_amount, remaining_amount, monthly_payment, debt_type="other", is_active=True):
     """Estructura el objeto de una deuda dentro del perfil de usuario"""
     return {
-        "debtId": ObjectId(),
-        "description": description,
-        "amount": float(amount),
-        "status": status, # pending | paid
-        "createdAt": datetime.now(timezone.utc)
-    }
+        "creditor": creditor,
+        "totalAmount": float(total_amount),
+        "remainingAmount": float(remaining_amount),
+        "monthlyPayment": float(monthly_payment),
+        "debtType": debt_type,
+        "isActive": is_active,
+    }

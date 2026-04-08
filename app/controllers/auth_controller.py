@@ -74,7 +74,9 @@ class AuthController:
             remaining_amount=data["remainingAmount"],
             monthly_payment=data["monthlyPayment"],
             debt_type=data.get("debtType", "other"),
+            is_active=data.get("isActive", True),
         )
+
         try:
             user = AuthService.add_debt(request.current_user_id, debt_doc)
         except ValueError as e:
