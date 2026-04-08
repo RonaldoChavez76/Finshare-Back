@@ -48,3 +48,5 @@ class DebtSchema(Schema):
     remainingAmount = fields.Float(required=True, validate=validate.Range(min=0))
     monthlyPayment  = fields.Float(required=True, validate=validate.Range(min=0))
     debtType        = fields.Str(load_default="other", validate=validate.OneOf(DEBT_TYPES))
+    isActive        = fields.Bool(load_default=True)
+

@@ -45,6 +45,18 @@ def create_app():
     
     from app.controllers.grupo_controller import grupo_bp
     app.register_blueprint(grupo_bp, url_prefix='/api/grupos_es') # Prefijo diferente para evitar choque
+
+    # 5. Análisis de Riesgo Financiero
+    from app.routes.risk_routes import risk_bp
+    app.register_blueprint(risk_bp, url_prefix='/api/risk')
+
+    # 6. Simulación de Escenarios
+    from app.routes.simulation_routes import simulations_bp
+    app.register_blueprint(simulations_bp, url_prefix='/api/simulations')
+
+    # 7. Dashboard / Visualización
+    from app.routes.dashboard_routes import dashboard_bp
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     
     @app.route('/')
     def index():
