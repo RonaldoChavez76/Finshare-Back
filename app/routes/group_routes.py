@@ -8,6 +8,8 @@ groups_bp = Blueprint("groups", __name__, url_prefix="/api/groups")
 groups_bp.post("/")(jwt_required(GroupController.create))
 groups_bp.get("/")(jwt_required(GroupController.list_mine))
 groups_bp.get("/<group_id>")(jwt_required(GroupController.get))
+groups_bp.patch("/<group_id>")(jwt_required(GroupController.update))
+groups_bp.delete("/<group_id>")(jwt_required(GroupController.delete))
 
 # Miembros
 groups_bp.post("/<group_id>/members")(jwt_required(GroupController.add_member))

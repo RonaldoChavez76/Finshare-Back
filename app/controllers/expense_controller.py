@@ -71,3 +71,31 @@ class ExpenseController:
             status = 403 if isinstance(e, PermissionError) else 404
             return error_response(str(e), status)
         return success_response(message="Gasto eliminado")
+    
+    @staticmethod
+    def get_balances(group_id: str):
+        try:
+            balances = ExpenseService.get_balances(group_id)
+            return success_response(balances, "Balances calculados")
+        except Exception as e:
+            return error_response(str(e), 500)
+        
+    @staticmethod
+    def update(expense_id: str):
+        try:
+            # Obtenemos los datos que vienen de RegistrarGastoForm (React)
+            data = request.get_json() or {}
+            
+            # Llamamos al servicio para actualizar
+            updated_expense = ExpenseService.update_expense(
+                expense_id, 
+                request.current_user_id, 
+                data
+            )
+            
+            return success_response(updated_expense, "Gasto actualizado correctamente")
+        except (ValueError, PermissionError) as e:
+            status = 403 if isinstance(e, PermissionError) else 400
+            return error_response(str(e), status)
+        except Exception as e:
+            return error_response("Error al actualizar el gasto", 500, str(e))

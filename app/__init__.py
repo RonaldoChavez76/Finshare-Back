@@ -37,7 +37,7 @@ def create_app():
     
     # 3. Gastos (Corregido el typo de 'expanse')
     from app.routes.expense_routes import expenses_bp
-    app.register_blueprint(expenses_bp, url_prefix='/api/expenses')
+    app.register_blueprint(expenses_bp)
 
     # 4. Versiones en Español (Si las vas a mantener para tu compañero)
     from app.controllers.gasto_controller import gasto_bp

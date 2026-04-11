@@ -133,6 +133,74 @@ class ExpenseService:
             raise PermissionError("No tienes permiso para eliminar este gasto.")
         db.shared_expenses.delete_one({"_id": ObjectId(expense_id)})
         return True
+    
+    @staticmethod
+    def get_balances(group_id: str):
+        db = get_db()
+        # Buscamos todos los gastos del grupo
+        gastos = list(db.shared_expenses.find({"groupId": ObjectId(group_id)}))
+        
+        saldos = {}
+        for gasto in gastos:
+            for split in gasto.get("splits", []):
+                u_id = str(split["userId"])
+                if u_id not in saldos:
+                    saldos[u_id] = {
+                        "userId": u_id,
+                        "userName": split.get("userName", "Usuario"),
+                        "totalPagado": 0.0,
+                        "totalAdeudado": 0.0,
+                        "balanceNeto": 0.0
+                    }
+                saldos[u_id]["totalPagado"] += float(split.get("amountPaid", 0))
+                saldos[u_id]["totalAdeudado"] += float(split.get("amountOwed", 0))
+
+        # Calculamos el neto (Lo que puse - Lo que me tocaba poner)
+        resultados = []
+        for uid, data in saldos.items():
+            data["balanceNeto"] = round(data["totalPagado"] - data["totalAdeudado"], 2)
+            resultados.append(data)
+            
+        return resultados
+    
+    @staticmethod
+    def update_expense(expense_id: str, requester_id: str, data: dict) -> dict:
+        db = get_db()
+        
+        # 1. Verificar que el gasto exista
+        expense = db.shared_expenses.find_one({"_id": ObjectId(expense_id)})
+        if not expense:
+            raise ValueError("Gasto no encontrado.")
+
+        # 2. Seguridad: Solo quien lo pagó o un admin puede editarlo
+        group = db.groups.find_one({"_id": expense["groupId"]})
+        if str(expense["paidBy"]) != requester_id and not _is_admin(group, requester_id):
+            raise PermissionError("No tienes permiso para editar este gasto.")
+
+        # 3. Preparar los datos para actualizar
+        # Convertimos los strings de IDs en ObjectIds para los splits
+        if "splits" in data:
+            for s in data["splits"]:
+                s["userId"] = ObjectId(s["userId"])
+                # Aseguramos que los montos sean float
+                s["amountOwed"] = float(s["amountOwed"])
+                s["amountPaid"] = float(s["amountPaid"])
+
+        update_data = {
+            "concept": data.get("concept", expense["concept"]),
+            "totalAmount": float(data.get("totalAmount", expense["totalAmount"])),
+            "category": data.get("category", expense["category"]),
+            "splits": data.get("splits", expense["splits"]),
+            "updatedAt": datetime.now(timezone.utc)
+        }
+
+        # 4. Ejecutar la actualización en MongoDB
+        db.shared_expenses.update_one(
+            {"_id": ObjectId(expense_id)},
+            {"$set": update_data}
+        )
+
+        return db.shared_expenses.find_one({"_id": ObjectId(expense_id)})
 
 
 # ─── Helpers (misma lógica que en group_service, extraída aquí también) ──────

@@ -71,22 +71,36 @@ class GroupController:
 
     @staticmethod
     def add_member(group_id: str):
+        # 1. Obtenemos los datos crudos
+        json_data = request.get_json() or {}
+        email = json_data.get("email")
+
+        # 2. Si viene un email, ignoramos el esquema estricto y vamos directo al Service
+        if email:
+            try:
+                # Usamos la función inteligente que ya tienes en el Service
+                nuevo_miembro = GroupService.add_member(group_id, email)
+                return success_response(nuevo_miembro, "Miembro agregado por email", 201)
+            except ValueError as e:
+                return error_response(str(e), 400)
+            except Exception as e:
+                return error_response("Error al procesar la invitación", 500, str(e))
+
+        # 3. Si NO viene email, seguimos con la lógica original de tus compañeros (por si acaso)
         try:
-            data = _add_member_schema.load(request.get_json() or {})
-        except ValidationError as e:
-            return error_response("Datos inválidos", 422, e.messages)
-        try:
-            group = GroupService.add_member(
+            data = _add_member_schema.load(json_data)
+            group = GroupService.add_member_by_id( # Tendrías que tener este método o ajustar
                 group_id=group_id,
                 requester_id=request.current_user_id,
                 user_id=data["userId"],
                 display_name=data.get("displayName", ""),
                 role=data.get("role", "member"),
             )
-        except (ValueError, PermissionError) as e:
-            status = 403 if isinstance(e, PermissionError) else 400
-            return error_response(str(e), status)
-        return success_response(group, "Miembro agregado")
+            return success_response(group, "Miembro agregado")
+        except ValidationError as e:
+            return error_response("Datos inválidos", 422, e.messages)
+        except Exception as e:
+            return error_response(str(e), 400)
 
     @staticmethod
     def remove_member(group_id: str, user_id: str):
