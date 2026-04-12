@@ -28,6 +28,23 @@ class SimulationController:
             status = 403 if isinstance(e, PermissionError) else 400
             return error_response(str(e), status)
         return success_response(sim, "Simulación ejecutada exitosamente", 201)
+    
+    @staticmethod
+    def preview():
+        """
+        POST /api/simulations/preview
+        Calcula una simulación sin persistirla.
+        """
+        try:
+            data = _simulation_schema.load(request.get_json() or {})
+        except ValidationError as e:
+            return error_response("Datos inválidos", 422, e.messages)
+        try:
+            sim = SimulationService.run(request.current_user_id, data, persist=False)
+        except (ValueError, PermissionError) as e:
+            status = 403 if isinstance(e, PermissionError) else 400
+            return error_response(str(e), status)
+        return success_response(sim, "Vista previa generada", 200)
 
     @staticmethod
     def list_simulations():

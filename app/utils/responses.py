@@ -14,17 +14,17 @@ class MongoJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def serialize(doc: dict) -> dict:
-    """Convierte ObjectIds y fechas en un documento MongoDB a strings."""
-    if doc is None:
+def serialize(obj):
+    """Convierte ObjectIds y fechas en cualquier objeto (dict, list, etc.) a tipos JSON-safe."""
+    if obj is None:
         return None
-    return json.loads(json.dumps(doc, cls=MongoJSONEncoder))
+    return json.loads(json.dumps(obj, cls=MongoJSONEncoder))
 
 
 def success_response(data=None, message: str = "OK", status: int = 200):
     body = {"success": True, "message": message}
     if data is not None:
-        body["data"] = serialize(data) if isinstance(data, dict) else data
+        body["data"] = serialize(data)
     return jsonify(body), status
 
 

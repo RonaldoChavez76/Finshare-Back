@@ -16,10 +16,9 @@ class SimulationService:
 
     # ── Crear y ejecutar simulación ───────────────────────────────────────────
     @staticmethod
-    def run(user_id: str, data: dict) -> dict:
+    def run(user_id: str, data: dict, persist: bool = True) -> dict:
         """
-        Crea una simulación, ejecuta el motor de cálculo según scenarioType
-        y persiste el documento completo (con result) en la BD.
+        Calcula una simulación. Si persist=True, la guarda en la BD.
         """
         db = get_db()
         user = db.users.find_one({"_id": ObjectId(user_id)})
@@ -65,9 +64,21 @@ class SimulationService:
         )
 
         sim_doc["result"] = result
+        if not persist:
+            # Para vista previa, eliminamos IDs de objetos para serialización limpia
+            sim_doc["_id"] = str(sim_doc["_id"])
+            sim_doc["createdBy"] = str(sim_doc["createdBy"])
+            if sim_doc.get("targetGroupId"):
+                sim_doc["targetGroupId"] = str(sim_doc["targetGroupId"])
+            return sim_doc
 
         # Persistir
         db.simulations.insert_one(sim_doc)
+        # Convertir a string para retorno consistente
+        sim_doc["_id"] = str(sim_doc["_id"])
+        sim_doc["createdBy"] = str(sim_doc["createdBy"])
+        if sim_doc.get("targetGroupId"):
+            sim_doc["targetGroupId"] = str(sim_doc["targetGroupId"])
         return sim_doc
 
     # ── Consultas ─────────────────────────────────────────────────────────────
