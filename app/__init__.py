@@ -57,6 +57,9 @@ def create_app():
     # 7. Dashboard / Visualización
     from app.routes.dashboard_routes import dashboard_bp
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    # 8. Transacciones personales
+    from app.routes.transaction_routes import transactions_bp
+    app.register_blueprint(transactions_bp)
     
     @app.route('/')
     def index():
