@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from app.config.database import get_db
 from app.models.expense_model import build_shared_expense, build_split, _compute_status
+from app.models.transaction_model import build_transaction
 
 
 class ExpenseService:
@@ -26,10 +27,20 @@ class ExpenseService:
             for s in data["splits"]
         ]
 
+        # Identificar quién pagó (quien tenga amountPaid > 0 en los splits)
+        pagador_real_id = requester_id
+        pagador_nombre = requester.get("fullName", "Usuario")
+        
+        for s in data["splits"]:
+            if float(s.get("amountPaid", 0)) > 0:
+                pagador_real_id = str(s["userId"])
+                pagador_nombre = s.get("userName", pagador_nombre)
+                break
+
         expense_doc = build_shared_expense(
             group_id=ObjectId(group_id),
-            paid_by=ObjectId(requester_id),
-            paid_by_name=requester["fullName"],
+            paid_by=ObjectId(pagador_real_id),
+            paid_by_name=pagador_nombre,
             concept=data["concept"],
             total_amount=data["totalAmount"],
             splits=splits,
@@ -111,13 +122,29 @@ class ExpenseService:
             array_filters=[{"elem.userId": ObjectId(target_user_id)}],
         )
 
-        # Recalcular status global del gasto
-        updated = db.shared_expenses.find_one({"_id": ObjectId(expense_id)})
-        new_global_status = _compute_status(updated["splits"])
-        db.shared_expenses.update_one(
-            {"_id": ObjectId(expense_id)},
-            {"$set": {"status": new_global_status}},
+        # Registro de Transacciones Automáticas -------------------------------
+        # 1. Gasto para el que está pagando (Target User)
+        payer_tx = build_transaction(
+            user_id=ObjectId(target_user_id),
+            transaction_type="expense",
+            amount=amount_paid,
+            concept=f"Saldar deuda: {expense['concept']}",
+            category="deuda_grupal",
+            transaction_date=datetime.now(timezone.utc)
         )
+        db.transactions.insert_one(payer_tx)
+
+        # 2. Ingreso para el que recibe el dinero (Original Payer)
+        receiver_id = expense["paidBy"]
+        receiver_tx = build_transaction(
+            user_id=receiver_id,
+            transaction_type="income",
+            amount=amount_paid,
+            concept=f"Cobro de deuda: {expense['concept']} (de {target_split.get('userName')})",
+            category="deuda_grupal",
+            transaction_date=datetime.now(timezone.utc)
+        )
+        db.transactions.insert_one(receiver_tx)
 
         return db.shared_expenses.find_one({"_id": ObjectId(expense_id)})
 
@@ -137,31 +164,38 @@ class ExpenseService:
     @staticmethod
     def get_balances(group_id: str):
         db = get_db()
-        # Buscamos todos los gastos del grupo
+        group = db.groups.find_one({"_id": ObjectId(group_id)})
+        if not group: return []
+        
+        members = group.get("members", [])
         gastos = list(db.shared_expenses.find({"groupId": ObjectId(group_id)}))
         
-        saldos = {}
+        saldos = {str(m["userId"]): {
+            "userId": str(m["userId"]),
+            "userName": m.get("displayName", "Usuario"),
+            "totalPagado": 0.0,
+            "totalAdeudado": 0.0,
+            "balanceNeto": 0.0
+        } for m in members if m.get("isActive")}
+        
         for gasto in gastos:
+            paid_by_id = str(gasto["paidBy"])
             for split in gasto.get("splits", []):
                 u_id = str(split["userId"])
-                if u_id not in saldos:
-                    saldos[u_id] = {
-                        "userId": u_id,
-                        "userName": split.get("userName", "Usuario"),
-                        "totalPagado": 0.0,
-                        "totalAdeudado": 0.0,
-                        "balanceNeto": 0.0
-                    }
-                saldos[u_id]["totalPagado"] += float(split.get("amountPaid", 0))
+                if u_id not in saldos: continue
+                
+                remaining = float(split.get("amountOwed", 0)) - float(split.get("amountPaid", 0))
+                
+                # Estadísticas
                 saldos[u_id]["totalAdeudado"] += float(split.get("amountOwed", 0))
+                saldos[u_id]["totalPagado"] += float(split.get("amountPaid", 0))
 
-        # Calculamos el neto (Lo que puse - Lo que me tocaba poner)
-        resultados = []
-        for uid, data in saldos.items():
-            data["balanceNeto"] = round(data["totalPagado"] - data["totalAdeudado"], 2)
-            resultados.append(data)
-            
-        return resultados
+                # Lógica de Balance Contable Simplificada:
+                # Balance neto = Todo lo que el usuario ha pagado - Todo lo que debe
+                saldos[u_id]["balanceNeto"] += float(split.get("amountPaid", 0))
+                saldos[u_id]["balanceNeto"] -= float(split.get("amountOwed", 0))
+
+        return [dict(s, balanceNeto=round(s["balanceNeto"], 2)) for s in saldos.values()]
     
     @staticmethod
     def update_expense(expense_id: str, requester_id: str, data: dict) -> dict:

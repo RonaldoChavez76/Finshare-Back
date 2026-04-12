@@ -187,5 +187,52 @@ class GroupService:
         # Devolvemos el grupo actualizado
         return GroupService.get_group(group_id, requester_id)
 
+    @staticmethod
+    def get_member_breakdown(group_id, requester_id):
+        db = get_db()
+        group = db.groups.find_one({"_id": ObjectId(group_id)})
+        if not group:
+            raise ValueError("Grupo no encontrado")
+        
+        # Verificar que el solicitante sea miembro
+        is_member = any(str(m["userId"]) == requester_id for m in group.get("members", []))
+        if not is_member and str(group.get("ownerId")) != requester_id:
+             raise PermissionError("No tienes permiso para ver este desglose")
+
+        # Traer todos los gastos del grupo
+        gastos = list(db.shared_expenses.find({"groupId": ObjectId(group_id)}))
+        members = group.get("members", [])
+        member_names = {str(m["userId"]): m.get("displayName", "Usuario") for m in members}
+
+        # Calcular deudas netas entre pares
+        # Estructura: debts[deudor][acreedor] = monto
+        debts = {}
+
+        for g in gastos:
+            paid_by_id = str(g["paidBy"])
+            for s in g.get("splits", []):
+                u_id = str(s["userId"])
+                if u_id == paid_by_id:
+                    continue
+                
+                amount_pending = float(s.get("amountOwed", 0)) - float(s.get("amountPaid", 0))
+                if amount_pending > 0:
+                    if u_id not in debts: debts[u_id] = {}
+                    debts[u_id][paid_by_id] = debts[u_id].get(paid_by_id, 0) + amount_pending
+
+        # Simplificar (netear) deudas si A le debe a B y B le debe a A
+        breakdown = []
+        for deudor, acreedores in debts.items():
+            for acreedor, monto in acreedores.items():
+                breakdown.append({
+                    "fromId": deudor,
+                    "fromName": member_names.get(deudor, "Usuario"),
+                    "toId": acreedor,
+                    "toName": member_names.get(acreedor, "Usuario"),
+                    "amount": round(monto, 2)
+                })
+
+        return breakdown
+
 # --- ALIAS DE CLASE (Para que 'GrupoService' también funcione) ---
 GrupoService = GroupService

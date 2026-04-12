@@ -108,6 +108,7 @@ class DashboardService:
             ],
         }
 
+
     # ── Panel de Grupo ─────────────────────────────────────────────────────────
     @staticmethod
     def group_summary(group_id: str, requester_id: str) -> dict:
@@ -128,24 +129,46 @@ class DashboardService:
 
         members = [m for m in group.get("members", []) if m.get("isActive")]
 
-        # Balance por miembro ---------------------------------------------------
-        balance_pipeline = [
-            {"$match": {"groupId": ObjectId(group_id)}},
-            {"$unwind": "$splits"},
-            {
-                "$group": {
-                    "_id":        "$splits.userId",
-                    "userName":   {"$first": "$splits.userName"},
-                    "totalOwed":  {"$sum": "$splits.amountOwed"},
-                    "totalPaid":  {"$sum": "$splits.amountPaid"},
-                }
-            },
-        ]
-        balance_by_member = list(db.shared_expenses.aggregate(balance_pipeline))
+        # Balance por miembro (Lógica corregida: Paid vs Owed) -------------------
+        # Buscamos todos los gastos del grupo para calcular deudas cruzadas
+        expenses = list(db.shared_expenses.find({"groupId": ObjectId(group_id)}))
+        
+        # Mapa de balances: { userId: balance }
+        saldos = {}
+        # Inicializar todos los miembros con 0
+        for m in members:
+            uid = str(m["userId"])
+            saldos[uid] = {
+                "_id":      uid,
+                "userName": m.get("displayName", "Usuario"),
+                "balance":  0.0,
+                "totalOwed":0.0,
+                "totalPaid":0.0
+            }
+
+        for exp in expenses:
+            paid_by_id = str(exp["paidBy"])
+            for split in exp.get("splits", []):
+                u_id = str(split["userId"])
+                if u_id not in saldos: continue # Usuario inactivo/eliminado
+                
+                # Cuánto falta por pagar de este split
+                remaining = float(split.get("amountOwed", 0)) - float(split.get("amountPaid", 0))
+                
+                # Acumular para estadísticas informativas
+                saldos[u_id]["totalOwed"] += float(split.get("amountOwed", 0))
+                saldos[u_id]["totalPaid"] += float(split.get("amountPaid", 0))
+
+                # Lógica de Balance Contable Simplificada:
+                # Balance neto = Todo lo que el usuario ha pagado - Todo lo que debe
+                saldos[u_id]["balance"] += float(split.get("amountPaid", 0))
+                saldos[u_id]["balance"] -= float(split.get("amountOwed", 0))
+
+        balance_by_member = list(saldos.values())
         for b in balance_by_member:
-            b["balance"]  = round(float(b["totalOwed"]) - float(b["totalPaid"]), 2)
-            b["totalOwed"]= round(float(b["totalOwed"]), 2)
-            b["totalPaid"]= round(float(b["totalPaid"]), 2)
+            b["balance"]   = round(b["balance"], 2)
+            b["totalOwed"] = round(b["totalOwed"], 2)
+            b["totalPaid"] = round(b["totalPaid"], 2)
 
         # Gastos por categoría --------------------------------------------------
         category_pipeline = [
